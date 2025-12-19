@@ -6,30 +6,179 @@
     <title>Robot Control</title>
     <style>
         body { 
-            font-family: sans-serif; text-align: center; background-color: #222; color: white; margin: 0; padding: 20px;
-            user-select: none; -webkit-user-select: none; /* No text select */
+            font-family: sans-serif; 
+            text-align: center; 
+            background-color: #222; 
+            color: white; 
+            margin: 0; 
+            padding: 20px;
+            user-select: none; 
+            -webkit-user-select: none;
         }
-        h1 { font-size: 22px; margin-bottom: 20px; }
+        
+        h1 { margin-bottom: 20px; font-size: 24px; }
 
-        /* Top Buttons */
-        .top-bar { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; }
-        .btn-top { padding: 12px 20px; font-size: 16px; border: none; border-radius: 8px; font-weight: bold; flex: 1; max-width: 140px;}
-        .btn-connect { background-color: #2196F3; color: white; }
-        .btn-voice { background-color: #ff9800; color: white; }
+        /* Top Action Buttons */
+        .top-bar { 
+            display: flex; 
+            justify-content: center; 
+            gap: 15px; 
+            margin-bottom: 30px; 
+        }
+        
+        .btn-top { 
+            padding: 12px 25px; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            color: white;
+            flex: 1;
+            max-width: 150px;
+        }
+        
+        .btn-connect { background-color: #2196F3; }
+        .btn-voice { background-color: #ff9800; }
 
-        /* Wheelchair Grid Layout */
+        /* The Cross/D-Pad Layout */
         .grid-container {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr; /* 3 columns */
+            grid-template-columns: 1fr 1fr 1fr;
             grid-template-rows: auto auto auto;
-            gap: 15px;
-            max-width: 350px;
+            gap: 10px;
+            max-width: 320px;
             margin: 0 auto;
         }
 
         .dpad {
-            background-color: #444; color: white; border: none; border-radius: 15px;
-            padding: 25px 0; font-size: 28px;
-            box-shadow: 0 5px #111; touch-action: manipulation;
+            background-color: #444; 
+            color: white; 
+            border: none; 
+            border-radius: 12px;
+            padding: 20px 0; 
+            font-size: 30px; 
+            cursor: pointer;
+            box-shadow: 0 4px #111;
+            touch-action: manipulation;
         }
+
         .dpad:active {
+            background-color: #666;
+            transform: translateY(3px);
+            box-shadow: none;
+        }
+
+        /* Button Positions */
+        #btn-fwd  { grid-column: 2; grid-row: 1; background-color: #4CAF50; }
+        #btn-left { grid-column: 1; grid-row: 2; background-color: #4CAF50; }
+        #btn-stop { grid-column: 2; grid-row: 2; background-color: #f44336; font-size: 18px; font-weight: 900; }
+        #btn-right{ grid-column: 3; grid-row: 2; background-color: #4CAF50; }
+        #btn-back { grid-column: 2; grid-row: 3; background-color: #4CAF50; }
+
+        #status { margin-top: 25px; color: #888; font-size: 14px; }
+        #voiceText { color: #ff9800; font-style: italic; min-height: 24px; margin-top: 10px;}
+    </style>
+</head>
+<body>
+
+    <h1>🤖 Robot Controller</h1>
+
+    <div class="top-bar">
+        <button class="btn-top btn-connect" onclick="connectBLE()">📡 Connect</button>
+        <button class="btn-top btn-voice" onclick="startVoice()">🎤 Voice</button>
+    </div>
+
+    <div class="grid-container">
+        <!-- Row 1 -->
+        <button id="btn-fwd" class="dpad" onmousedown="startCmd('F')" onmouseup="endCmd()" ontouchstart="startCmd('F')" ontouchend="endCmd()">⬆️</button>
+        
+        <!-- Row 2 -->
+        <button id="btn-left" class="dpad" onmousedown="startCmd('L')" onmouseup="endCmd()" ontouchstart="startCmd('L')" ontouchend="endCmd()">⬅️</button>
+        <button id="btn-stop" class="dpad" onclick="sendCommand('S')">STOP</button>
+        <button id="btn-right" class="dpad" onmousedown="startCmd('R')" onmouseup="endCmd()" ontouchstart="startCmd('R')" ontouchend="endCmd()">➡️</button>
+        
+        <!-- Row 3 -->
+        <button id="btn-back" class="dpad" onmousedown="startCmd('B')" onmouseup="endCmd()" ontouchstart="startCmd('B')" ontouchend="endCmd()">⬇️</button>
+    </div>
+
+    <p id="voiceText"></p>
+    <p id="status">Status: Disconnected</p>
+
+    <script>
+        // --- CONFIGURATION ---
+        const serviceUUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+        const charUUID =    "0000ffe1-0000-1000-8000-00805f9b34fb";
+        
+        let bleDevice, bleServer, bleService, bleChar;
+
+        async function connectBLE() {
+            try {
+                document.getElementById("status").innerText = "Scanning...";
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [serviceUUID] }]
+                });
+
+                bleServer = await bleDevice.gatt.connect();
+                bleService = await bleServer.getPrimaryService(serviceUUID);
+                bleChar = await bleService.getCharacteristic(charUUID);
+
+                document.getElementById("status").innerText = "✅ Connected to " + bleDevice.name;
+            } catch (error) {
+                console.log(error);
+                document.getElementById("status").innerText = "❌ Connection Failed: " + error;
+            }
+        }
+
+        async function sendCommand(cmd) {
+            if (!bleChar) return;
+            try {
+                const encoder = new TextEncoder();
+                await bleChar.writeValue(encoder.encode(cmd));
+            } catch (e) {
+                console.log("Error sending: " + e);
+            }
+        }
+
+        function startCmd(cmd) {
+            if(event.type === 'touchstart') event.preventDefault();
+            sendCommand(cmd);
+        }
+
+        function endCmd() {
+            if(event.type === 'touchend') event.preventDefault();
+            sendCommand('S');
+        }
+
+        // --- VOICE ---
+        function startVoice() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Voice control requires Chrome Browser.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.start();
+
+            document.getElementById("voiceText").innerText = "Listening...";
+
+            recognition.onresult = function(event) {
+                const command = event.results[0][0].transcript.toLowerCase();
+                document.getElementById("voiceText").innerText = '"' + command + '"';
+
+                if (command.includes("go") || command.includes("forward")) sendCommand('F');
+                else if (command.includes("back") || command.includes("reverse")) sendCommand('B');
+                else if (command.includes("left")) sendCommand('L');
+                else if (command.includes("right")) sendCommand('R');
+                else if (command.includes("stop")) sendCommand('S');
+            };
+            
+            recognition.onspeechend = function() {
+                recognition.stop();
+            }
+        }
+    </script>
+</body>
+</html>
